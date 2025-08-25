@@ -1,185 +1,66 @@
 package com.example.points3d.scene
 
-import android.content.Context
-import android.net.Uri
 import android.util.Log
-import androidx.annotation.RawRes
-import com.google.ar.sceneform.Node
-import com.google.ar.sceneform.SceneView
-import com.google.ar.sceneform.math.Vector3
-import com.google.ar.sceneform.rendering.Color
-import com.google.ar.sceneform.rendering.MaterialFactory
-import com.google.ar.sceneform.rendering.ModelRenderable
-import com.google.ar.sceneform.rendering.Renderable
-//import com.google.ar.sceneform.rendering.RenderableSource
-import com.google.ar.sceneform.rendering.ShapeFactory
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import androidx.core.net.toUri
-import com.example.points3d.R
+import io.github.sceneview.SceneView
+import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
+import io.github.sceneview.math.Scale
+import io.github.sceneview.node.ModelNode
 
 private const val TAG = "SceneHelpers"
 
-/**
- * Load a GLB from res/raw and add it to the scene at the given position.
- * Uses the simple ModelRenderable.builder().setSource(context, uri) path (no RenderableSource).
- */
-suspend fun addModelFromRaw(
-    context: Context,
+/** Load a GLB from assets/models and add it to the SceneView (synchronous create). */
+fun addModelFromAssets(
     sceneView: SceneView,
-    @RawRes rawResId: Int,
-    position: Vector3 = Vector3(0f, 0f, -0.5f)
-): Node {
-    val model = loadModelRenderableFromRaw(context, rawResId)
-    val node = Node().apply {
-        renderable = model
-        localPosition = position
-    }
-    sceneView.scene.addChild(node)
-    Log.d(TAG, "Model added at $position")
-    return node
-}
-
-/** Create a small colored sphere renderable. */
-suspend fun createColoredSphere(
-    context: Context,
-    radius: Float,
-    colorInt: Int
-): Renderable = suspendCancellableCoroutine { cont ->
-    val sceneformColor = Color(colorInt)
-    MaterialFactory.makeOpaqueWithColor(
-        context, sceneformColor
-    ).thenAccept { material ->
-        val center = Vector3(0f, 0f, 0f)
-        val sphere = ShapeFactory.makeSphere(radius, center, material)
-        cont.resume(sphere)
-    }.exceptionally { ex ->
-        cont.resumeWithException(ex)
-        null
+    assetPath: String,                           // e.g. "models/sample_model.glb"
+    position: Position = Position(0f, 0f, -0.5f),
+    rotation: Rotation = Rotation(0f, 0f, 0f),
+    scale: Scale = Scale(1f),
+    onLoaded: ((ModelNode) -> Unit)? = null,
+    onError: ((Throwable) -> Unit)? = null
+) {
+    try {
+        // Create a ModelInstance directly from the asset path
+        val modelInstance = sceneView.modelLoader.createModelInstance(assetPath)
+        val node = ModelNode(modelInstance).apply {
+            this.position = position
+            this.rotation = rotation
+            this.scale = scale
+        }
+        sceneView.addChildNode(node)
+        onLoaded?.invoke(node)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load model: $assetPath", e)
+        onError?.invoke(e)
     }
 }
 
 /**
- * Creates a small colored sphere and adds it to the scene at the given position.
- * colorInt should be an ARGB android.graphics.Color int (e.g., Color.RED).
+ * Add a point by loading a tiny pre-colored sphere GLB and scaling it.
+ *
+ * @param sphereAssetPath one of:
+ *  - "models/point_idle.glb"
+ *  - "models/point_complete.glb"
+ *  - "models/point_error.glb"
  */
-suspend fun addColoredSpherePoint(
-    context: Context,
+fun addPointSphereFromAsset(
     sceneView: SceneView,
-    position: Vector3,
+    sphereAssetPath: String,
+    position: Position,
     radiusMeters: Float = 0.01f,
-    colorInt: Int,
-    onTap: ((Node) -> Unit)? = null
-): Node {
-    val sphere = createColoredSphereRenderable(context, radiusMeters, colorInt)
-    val node = Node().apply {
-        renderable = sphere
-        localPosition = position
-        setOnTapListener { _, _ -> onTap?.invoke(this) }
+    onLoaded: ((ModelNode) -> Unit)? = null,
+    onError: ((Throwable) -> Unit)? = null
+) {
+    try {
+        val modelInstance = sceneView.modelLoader.createModelInstance(sphereAssetPath)
+        val node = ModelNode(modelInstance).apply {
+            this.position = position
+            this.scale = Scale(radiusMeters)
+        }
+        sceneView.addChildNode(node)
+        onLoaded?.invoke(node)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load sphere: $sphereAssetPath", e)
+        onError?.invoke(e)
     }
-    sceneView.scene.addChild(node)
-    Log.d(TAG, "Sphere added at $position (r=$radiusMeters)")
-    return node
-}
-
-
-/** Load a GLB model from res/raw via RenderableSource. */
-//suspend fun loadGlbFromRaw(
-//    context: Context,
-//    rawResId: Int
-//): ModelRenderable = suspendCancellableCoroutine { cont ->
-////    val uri = Uri.parse("android.resource://${context.packageName}/$rawResId")
-////    ModelRenderable.builder()
-////        .setSource(context, uri)
-////        .build()
-////        .thenAccept { renderable -> cont.resume(renderable) }
-////        .exceptionally { ex ->
-////            cont.resumeWithException(ex)
-////            null
-////        }
-//    val entryName = context.resources.getResourceEntryName(R.raw.sample_model)
-//    val uri = "android.resource://${context.packageName}/raw/$entryName".toUri()
-//
-//    ModelRenderable.builder()
-//        .setSource(this, uri)   // no RenderableSource
-//        .build()
-//        .thenAccept { renderable -> cont.resume(renderable) }
-//        .exceptionally { ex ->
-//            cont.resumeWithException(ex)
-//            null
-//        }
-//
-////    ModelRenderable.builder()
-////        .setSource(context, source)
-////        .setRegistryId(uri)
-////        .build()
-////        .thenAccept { renderable -> cont.resume(renderable) }
-////        .exceptionally { ex ->
-////            cont.resumeWithException(ex)
-////            null
-////        }
-//
-//}
-
-/* ------------ Internals (suspend helpers) ------------ */
-
-/** Loads a GLB from res/raw using the simple builder API. */
-private suspend fun loadModelRenderableFromRaw(
-    context: Context,
-    @RawRes rawResId: Int
-): ModelRenderable = suspendCancellableCoroutine { cont ->
-    // Build android.resource://<pkg>/raw/<entryName>
-    val entryName = context.resources.getResourceEntryName(rawResId)
-    val uri = Uri.parse("android.resource://${context.packageName}/raw/$entryName")
-
-    ModelRenderable.builder()
-        .setSource(context, uri) // simple overload, works for GLB in raw/
-        .build()
-        .thenAccept { renderable ->
-            cont.resume(renderable)
-        }
-        .exceptionally { ex ->
-            Log.e(TAG, "Model load failed (raw=$entryName): ${ex.message}", ex)
-            cont.resumeWithException(ex)
-            null
-        }
-}
-
-/** Creates a Sceneform Renderable sphere with a solid color. */
-private suspend fun createColoredSphereRenderable(
-    context: Context,
-    radiusMeters: Float,
-    colorInt: Int
-): Renderable = suspendCancellableCoroutine { cont ->
-    // Use Sceneform's Color, constructed from Android ARGB int
-    val sfColor = Color(colorInt)
-
-    MaterialFactory.makeOpaqueWithColor(context, sfColor)
-        .thenAccept { material ->
-            val center = Vector3(0f, 0f, 0f)
-            val sphere = ShapeFactory.makeSphere(radiusMeters, center, material)
-            cont.resume(sphere)
-        }
-        .exceptionally { ex ->
-            Log.e(TAG, "Sphere material failed: ${ex.message}", ex)
-            cont.resumeWithException(ex)
-            null
-        }
-}
-
-/** Helper to add a Renderable at a given position with a tap listener. */
-fun addRenderableNode(
-    sceneView: SceneView,
-    renderable: Renderable,
-    position: Vector3,
-    onTap: ((Node) -> Unit)? = null
-): Node {
-    val node = Node().apply {
-        this.renderable = renderable
-        localPosition = position
-        setOnTapListener { _, _ -> onTap?.invoke(this) }
-    }
-    sceneView.scene.addChild(node)
-    return node
 }

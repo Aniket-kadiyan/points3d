@@ -1,72 +1,78 @@
 package com.example.points3d.ui
 
-//import android.graphics.Color
+
+import android.graphics.Color as AColor
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
-import com.example.points3d.R
 import com.example.points3d.databinding.ActivityMainBinding
 import com.example.points3d.domain.Point3D
 import com.example.points3d.domain.PointState
-import com.example.points3d.scene.addColoredSpherePoint
-import com.example.points3d.scene.addModelFromRaw
-import com.example.points3d.scene.addRenderableNode
-import com.example.points3d.scene.createColoredSphere
-import com.google.ar.sceneform.math.Vector3
+import com.example.points3d.scene.addModelFromAssets
+
+import com.example.points3d.scene.addPointSphereFromAsset
+import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
+import io.github.sceneview.node.ModelNode
 import kotlinx.coroutines.launch
-import android.graphics.Color as AColor
+import android.view.MotionEvent
+import io.github.sceneview.collision.HitResult
+
 
 class MainActivity : ComponentActivity() {
+
+
     private lateinit var binding: ActivityMainBinding
+    private lateinit var orbit: OrbitPanController
     private val vm: MainViewModel by viewModels()
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Load reference model (GLB in res/raw)
-        val ctx = this@MainActivity
+
+// Load reference model from assets/models/
         lifecycleScope.launch {
-            try {
-//                val model = loadGlbFromRaw(ctx, R.raw.sample_model)
-//                addRenderableNode(
-//                    binding.sceneView,
-//                    model,
-//                    position = Vector3(0f, 0f, -0.5f)
-//                )
-                addModelFromRaw(
-                    context = ctx,
-                    sceneView = binding.sceneView,
-                    rawResId = R.raw.sample_model,
-                    position = Vector3(0f, 0f, -0.5f)
-                )
-                binding.infoText.text = "Model loaded ✓"
-            } catch (e: Exception) {
-                Log.e("ModelLoad", "Failed: ${e.message}", e)
-                binding.infoText.text = "Model load failed: ${e.message}"
-            }
+            addModelFromAssets(
+                sceneView = binding.sceneView,
+                assetPath = "models/sample_model.glb"
+            )
+
         }
 
-        // Observe and render points
+
+// Render points when data arrives
         vm.samplePoints.observe(this) { points ->
-//            renderPoints(points)
             lifecycleScope.launch {
                 for (p in points) {
-                    addColoredSpherePoint(
-                        context = ctx,
+                    addPointSphereFromAsset(
                         sceneView = binding.sceneView,
-                        position = Vector3(p.x, p.y, p.z),
-                        radiusMeters = 0.01f,
-                        colorInt = stateToColor(p.state)
-                    ) { showInfo(p) }
+                        sphereAssetPath = stateToSpherePath(p.state),
+                        position = Position(p.x, p.y, p.z),
+                        radiusMeters = 0.01f
+                    )
                 }
             }
         }
 
+
+// Tap detection (global listener)
+        binding.sceneView.onTouchEvent = { e: MotionEvent, hit: HitResult? ->
+            val node = hit?.node
+            if (node is ModelNode) {
+                binding.infoText.text = "Tapped node at ${node.position}"
+                true
+            } else {
+                false
+            }
+        }
+
+
     }
+
 
     private fun stateToColor(state: PointState): Int = when (state) {
         PointState.IDLE -> AColor.GRAY
@@ -74,21 +80,10 @@ class MainActivity : ComponentActivity() {
         PointState.ERROR -> AColor.RED
     }
 
-    private fun renderPoints(points: List<Point3D>) {
-        lifecycleScope.launch {
-            for (p in points) {
-                val sphere = createColoredSphere(
-                    this@MainActivity,
-                    radius = 0.01f,
-                    colorInt = stateToColor(p.state)
-                )
-                addRenderableNode(
-                    binding.sceneView,
-                    sphere,
-                    position = Vector3(p.x, p.y, p.z)
-                ) { showInfo(p) }
-            }
-        }
+    fun stateToSpherePath(state: PointState): String = when (state) {
+        PointState.IDLE -> "models/point_idle.glb"
+        PointState.COMPLETE -> "models/point_complete.glb"
+        PointState.ERROR -> "models/point_error.glb"
     }
 
     private fun showInfo(p: Point3D) {
