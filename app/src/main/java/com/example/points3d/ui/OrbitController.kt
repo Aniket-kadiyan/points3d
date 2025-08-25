@@ -16,10 +16,14 @@ class OrbitPanController(
     startRadius: Float = 1.8f,
     private val onTapSelect: ((MotionEvent) -> Unit)? = null // delegate selection to Activity
 ) {
-    enum class Mode { ORBIT, PAN }
+    enum class Mode { ORBIT, PAN, SELECT }
 
+    //    var mode: Mode = Mode.ORBIT
     var mode: Mode = Mode.ORBIT
-
+        set(value) {
+            field = value
+            if (value == Mode.SELECT) dragging = false
+        }
     private var azimuth = startAzimuthDeg
     private var elevation = startElevationDeg
     private var radius = startRadius
@@ -76,6 +80,8 @@ class OrbitPanController(
 
     fun attach() {
         sceneView.setOnTouchListener { _, ev ->
+            // In SELECT mode, don’t intercept; let SceneView’s onTouchEvent handle taps/hit tests
+            if (mode == Mode.SELECT) return@setOnTouchListener false
             var consumed = false
             consumed = scaleDetector.onTouchEvent(ev) || consumed
             consumed = tapDetector.onTouchEvent(ev) || consumed
@@ -95,22 +101,37 @@ class OrbitPanController(
                     movedPx += hypot(dx, dy)
 
                     if (dragging && !scaleDetector.isInProgress) {
+//                        val dx = ev.x - lastX
+//                        val dy = ev.y - lastY
                         when (mode) {
                             Mode.ORBIT -> {
                                 azimuth -= dx * rotateSpeed
                                 elevation += dy * rotateSpeed
                                 elevation = elevation.coerceIn(minElevation, maxElevation)
+                                updateCamera()
+                                consumed = true
                             }
 
                             Mode.PAN -> {
-                                // pan along camera-right and camera-up; scale by radius to feel natural
+                                // improved FOV‑based panning
                                 val (right, up) = cameraBasis()
                                 val k = panSpeed * radius
+
+                                val moveRight = -dx * k
+                                val moveUp = -dy * k
                                 target = Position(
-                                    target.x - (right.x * dx + up.x * -dy) * k,
-                                    target.y - (right.y * dx + up.y * -dy) * k,
-                                    target.z - (right.z * dx + up.z * -dy) * k
+                                    target.x + right.x * moveRight + up.x * moveUp,
+                                    target.y + right.y * moveRight + up.y * moveUp,
+                                    target.z + right.z * moveRight + up.z * moveUp
                                 )
+                                updateCamera()
+                                consumed = true
+                            }
+
+                            Mode.SELECT -> {
+                                // nothing to do here – SELECT mode leaves camera untouched
+                                // (touches are handled elsewhere / passed through)
+                                consumed = false
                             }
                         }
                         lastX = ev.x
@@ -135,9 +156,9 @@ class OrbitPanController(
         updateCamera()
     }
 
-    fun setMode(newMode: Mode) {
-        mode = newMode
-    }
+//    fun setMode(newMode: Mode) {
+//        mode = newMode
+//    }
 
     private fun updateCamera() {
         val a = Math.toRadians(azimuth.toDouble())

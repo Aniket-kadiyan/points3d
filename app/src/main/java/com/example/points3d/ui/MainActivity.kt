@@ -18,6 +18,7 @@ import io.github.sceneview.node.ModelNode
 import kotlinx.coroutines.launch
 import android.view.MotionEvent
 import io.github.sceneview.collision.HitResult
+import android.view.View
 
 
 class MainActivity : ComponentActivity() {
@@ -32,6 +33,33 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+// Set up camera controller with three modes (orbit, pan, select)
+        orbit = OrbitPanController(binding.sceneView)
+        orbit.attach()
+
+        // Toggle overlay visibility when FAB is tapped
+        binding.fabToggle.setOnClickListener {
+            binding.modePanel.visibility =
+                if (binding.modePanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        // Set mode buttons to change the controller’s mode and hide panel
+        binding.rotateButton.setOnClickListener {
+//            orbit.setMode(OrbitPanController.Mode.ORBIT)
+            orbit.mode = OrbitPanController.Mode.ORBIT
+            binding.modePanel.visibility = View.GONE
+
+        }
+        binding.panButton.setOnClickListener {
+//            orbit.setMode(OrbitPanController.Mode.PAN)
+            orbit.mode = OrbitPanController.Mode.PAN
+            binding.modePanel.visibility = View.GONE
+        }
+        binding.selectButton.setOnClickListener {
+//            orbit.setMode(OrbitPanController.Mode.SELECT)
+            orbit.mode = OrbitPanController.Mode.SELECT
+            binding.modePanel.visibility = View.GONE
+        }
 
 
 // Load reference model from assets/models/
